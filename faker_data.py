@@ -12,14 +12,33 @@ from core.models import (
 from django.utils import timezone
 
 from django.core.files.uploadedfile import InMemoryUploadedFile
-import os
-from django.core.files import File
-from django.conf import settings
+from django.core.files.base import ContentFile
 from PIL import Image
 from io import BytesIO
 
+import python_avatars as pa
+import cairosvg
+import string
+import os
+
+from web.settings import BASE_DIR
+
+
 fake = Faker()
-total = 1000
+total = 10
+
+
+def convert_svg_to_image(svg_file, output_file, output_format):
+    with open(svg_file, 'rb') as f:
+        svg_data = f.read()
+        if output_format.lower() == 'png':
+            cairosvg.svg2png(bytestring=svg_data, write_to=output_file)
+        elif output_format.lower() == 'jpg':
+            cairosvg.svg2jpg(bytestring=svg_data, write_to=output_file)
+        else:
+            raise ValueError('Unsupported output format')
+
+    return os.path.isfile(output_file)
 
 def generate_image():
     img = Image.new('RGB', (300, 300), color=(random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)))
@@ -52,7 +71,24 @@ services = Service.objects.all()
 # Generar objetos aleatorios para Owner
 owners = []
 for i in range(total):
+    avatar = pa.Avatar.random()
+    image_name = f'{fake.uuid4()}.svg'
+    image_path = os.path.join(BASE_DIR, 'media', 'core', 'Owner', image_name)
+    os.makedirs(os.path.dirname(image_path), exist_ok=True)
+    svg_data = avatar.render(path=image_path)
+
+    png_bytes = cairosvg.svg2png(bytestring=svg_data)
+    image_file = InMemoryUploadedFile(
+        BytesIO(png_bytes),
+        None,
+        f"{fake.uuid4()}.png",
+        "image/png",
+        len(png_bytes),
+        None,
+    )
+
     owner = Owner(
+        image=image_file,
         document_id=fake.uuid4(),
         name=fake.first_name(),
         lastname=fake.last_name(),
@@ -61,16 +97,10 @@ for i in range(total):
         birthdate=fake.date_time_between(start_date='-30y', end_date='-18y', tzinfo=timezone.utc),
     )
     owner.save()
-
-     # Creamos una imagen aleatoria
-    image = Image.new('RGB', (100, 100), color=(255, 0, 0))
-    image_io = BytesIO()
-    image.save(image_io, 'JPEG')
-    image_io.seek(0)
+    # owner.image.save(f'{fake.uuid4()}.png', ContentFile(avatar))
 
     veterinary = AffiliatedVeterinary(
         name=fake.company(),
-        # logo=file,
         logo=InMemoryUploadedFile(
             generate_image(),
             'ImageField',
@@ -92,14 +122,6 @@ for i in range(total):
     )
     veterinary.save()
 
-    # filename = f'{fake.uuid4()}.jpg'
-    # filepath = os.path.join(settings.MEDIA_ROOT, 'core', 'AffiliatedVeterinary', filename)
-    # with open(filepath, 'wb') as f:
-    #     f.write(image_io.read())
-    #     f.close()
-    # with open(filepath, 'rb') as f:
-    #     veterinary.logo.save(filename, File(f), save=True)
-    #     veterinary.save()
 owners = Owner.objects.all()
 affiliatedVeterinaries = AffiliatedVeterinary.objects.all()
 

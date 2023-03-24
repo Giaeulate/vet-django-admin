@@ -12,6 +12,7 @@ class AutoDateTimeAbstract(models.Model):
 
 class Owner(AutoDateTimeAbstract):
     document_id = models.CharField(unique=True, max_length=255)
+    image = models.ImageField(upload_to='core/Owner/', blank=True, null=True)
     name = models.CharField(max_length=255)
     lastname = models.CharField(max_length=255)
     phone = models.CharField(max_length=255)
